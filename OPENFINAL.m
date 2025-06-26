@@ -30,7 +30,7 @@ switch method
             Xs = [Xs; x, y];  % Append the new point
             plot(x, y, 'k.', 'MarkerSize', 25);  % Display the clicked point
         end
-        hold off;       
+        hold off;
     case 2
         [fileName, pathName] = uigetfile({'*.csv;*.txt;*.xlsx', 'Data Files (*.csv, *.txt, *.xlsx)'}, ...
             'Select the data file containing scattered points');
@@ -73,29 +73,29 @@ set(gca, 'FontSize', font_size, 'TickLabelInterpreter', 'latex', 'GridColor', 'r
 %% Compute Ellipse Parameters for Each Cluster
 for i = 1:K
     % Extract points in the i-th cluster
-    cluster_points = Xs(idx == i, :);    
+    cluster_points = Xs(idx == i, :);
     % Compute the covariance matrix
-    Sigma = cov(cluster_points);   
+    Sigma = cov(cluster_points);
     % Eigenvalue decomposition of the covariance matrix
     [V, D] = eig(Sigma);
     % Eigenvalues (variances along principal directions)
     lambda1 = D(1,1);
-    lambda2 = D(2,2);    
+    lambda2 = D(2,2);
     % Compute semi-axes using the scaling factor 'k'
     a(i) = k * sqrt(lambda1);
-    b(i) = k * sqrt(lambda2);   
+    b(i) = k * sqrt(lambda2);
     % Determine orientation angle from the first eigenvector
-    alpha(i) = atan2(V(2,1), V(1,1));   
+    alpha(i) = atan2(V(2,1), V(1,1));
     % --- Plot the Ellipse ---
     theta = linspace(0, 2*pi, 100);
     ellipse_x = a(i) * cos(theta);
-    ellipse_y = b(i) * sin(theta);    
+    ellipse_y = b(i) * sin(theta);
     % Rotate the ellipse using the computed angle
     R = [cos(alpha(i)) -sin(alpha(i)); sin(alpha(i)) cos(alpha(i))];
-    ellipse_rotated = (R * [ellipse_x; ellipse_y])';    
+    ellipse_rotated = (R * [ellipse_x; ellipse_y])';
     % Translate the ellipse to the cluster centroid
     ellipse_rotated(:,1) = ellipse_rotated(:,1) + centroids(i,1);
-    ellipse_rotated(:,2) = ellipse_rotated(:,2) + centroids(i,2);    
+    ellipse_rotated(:,2) = ellipse_rotated(:,2) + centroids(i,2);
     % Plot the ellipse with a thicker line
     figure (2)
     plot(ellipse_rotated(:,1), ellipse_rotated(:,2), 'LineWidth', 2);
@@ -104,30 +104,118 @@ end
 xlabel('$x(t)$','Interpreter', 'latex', 'FontSize', font_size);
 ylabel('$y(t)$', 'Interpreter', 'latex', 'FontSize', font_size);
 title('Flight-Sensitive Areas and the Optimal Flight Path', 'Interpreter', 'latex', 'FontSize', font_size);
-xlim([-0.2*x_f, 1.2*x_f]);  % Limit x-axis
-ylim([-0.2*y_f, 1.2*y_f]);  % Limit y-axis
+xlim([-0.1*x_f, 1.1*x_f]);  % Limit x-axis
+ylim([-0.1*y_f, 1.1*y_f]);  % Limit y-axis
 grid on;
 set(gca, 'FontSize', font_size, 'TickLabelInterpreter', 'latex', 'GridColor', 'r');
 %% User Inputs for Wind Functions W_x(x,y) and W_y(x,y)
-disp('Define the wind functions W_x(x,y) and W_y(x,y).');
-wx_str = input('Enter W_x(x,y) as a function of x and y; e.g., 20: ', 's');
-wy_str = input('Enter W_y(x,y) as a function of x and y; e.g., -20: ', 's');
-% wx_str=0; wy_str=0;
-% Convert user input strings into function handles
-W_x = str2func(['@(x,y) ' wx_str]);
-W_y = str2func(['@(x,y) ' wy_str]);
+syms x y real
+% Parameters
+Mv = 5; Md = 5;
+l = min(x_f, y_f);
+R0 = l / 7.5;
 
+% Ask user to choose wind field type
+customWind = lower(input('Do you want to provide your own wind field? y for yes and n for synthetic built-in wind generator: ', 's'));
+user_wind=0;
+if strcmp(customWind, 'y')
+    user_wind=1;
+    % USER-DEFINED WIND FIELD
+    disp('Define your wind functions W_x(x,y) and W_y(x,y) as anonymous functions:');
+    v = input('Enter W_x as a function handle, e.g., @(x,y): ');
+    u = input('Enter W_y as a function handle, e.g., @(x,y): ');
+else
+    % SYNTHETIC WIND FIELD GENERATION
+    Max_wind = input('Enter the maximum absolute wind value [m/s], e.g., 20: ');
+    
+    % Precompute mesh for visualization
+    [X_wind, Y_wind] = meshgrid(linspace(0, x_f, 25), linspace(0, y_f, 25));
+    
+    while true
+        % Generate random parameters
+        params = struct();
+        params.U_inf = (2*rand() - 1) * Max_wind;
+        params.V_inf = (2*rand() - 1) * Max_wind;
+        params.Gamma = Max_wind * 2*pi*R0 * (2*rand(1, Mv) - 1);
+        params.x0v   = l * rand(1, Mv);
+        params.y0v   = l * rand(1, Mv);
+        params.R0v   = R0 * (0.5 + 2.5 * rand(1, Mv));
+        params.mu    = 2 * Max_wind * 2*pi*R0^2 * (2*rand(1, Md) - 1);
+        params.theta = 2*pi * rand(1, Md);
+        params.x0d   = l * rand(1, Md);
+        params.y0d   = l * rand(1, Md);
+        params.R0d   = R0 * (0.5 + 2.5 * rand(1, Md));
 
+        % Initialize symbolic wind field
+        u = params.U_inf;
+        v = params.V_inf;
+
+        % Vortex contributions
+        for i = 1:Mv
+            dx = x - params.x0v(i);
+            dy = y - params.y0v(i);
+            r2 = dx^2 + dy^2 + params.R0v(i)^2;
+            u = u + params.Gamma(i)/(2*pi) * (-dy / r2);
+            v = v + params.Gamma(i)/(2*pi) * ( dx / r2);
+        end
+
+        % Dipole contributions
+        for i = 1:Md
+            dx = x - params.x0d(i);
+            dy = y - params.y0d(i);
+            r2 = dx^2 + dy^2 + params.R0d(i)^2;
+            r4 = r2^2;
+            mu = params.mu(i);
+            theta = params.theta(i);
+            cosT = cos(theta); sinT = sin(theta);
+            ux = mu * cosT * (dx^2 - dy^2) + 2 * mu * sinT * dx * dy;
+            uy = mu * sinT * (dy^2 - dx^2) + 2 * mu * cosT * dx * dy;
+            u = u + (1/(2*pi)) * ux / r4;
+            v = v + (1/(2*pi)) * uy / r4;
+        end
+
+        % Convert to numeric functions
+        W_x = matlabFunction(u, 'Vars', [x, y]);
+        W_y = matlabFunction(v, 'Vars', [x, y]);
+
+        % Visualize numerically
+        U = W_x(X_wind, Y_wind);
+        V = W_y(X_wind, Y_wind);
+
+        figure(10); clf;
+        quiver(X_wind, Y_wind, U, V, ...
+            'AutoScale', 'on', ...
+            'AutoScaleFactor', 1, ...
+            'LineWidth', 0.75, ...
+            'MaxHeadSize', 5, ...
+            'Color', 'k');
+        axis equal tight;
+        xlabel('x [m]');
+        ylabel('y [m]');
+        title('Synthetic Wind Field');
+
+        grid on;
+        set(gca, ...
+            'GridColor', 'r', ...
+            'XColor', 'r', ...
+            'YColor', 'r');
+
+        drawnow;
+
+        % Ask user if they like this field
+        answer = lower(input('Do you want to keep this wind field? (y/n): ', 's'));
+        if strcmp(answer, 'y')
+            break;  % Accept generated wind
+        end
+    end
+end
 %% --- Additional Calculations: g(x,y) and its Partial Derivatives ---
 % Prompt user for the coefficients c_{s,i} for each ellipse (cluster)
-disp('Enter the weights c_{s,i} for each ellipse (as a vector of length K).');
+disp('Enter the weights c_{s,i} [ideally between 0 and 1] for each ellipse (as a vector of length K).');
 c_s = input(sprintf('Enter weights for each of the %d ellipses (e.g., [0.1 0.2 ...]): ', K));
 if length(c_s) ~= K
     error('The number of coefficients must equal the number of clusters (ellipses)!');
 end
-
-% Define symbolic variables
-syms x y
 
 % Initialize symbolic expression for g(x,y)
 g_sym = sym(0);
@@ -153,19 +241,19 @@ for i = 1:K
 end
 
 % Compute the partial derivatives of g(x,y)
-dg_dx_sym = simplify(diff(g_sym, x));
-dg_dy_sym = simplify(diff(g_sym, y));
+dg_dx_sym = (diff(g_sym, x));
+dg_dy_sym = (diff(g_sym, y));
 
 %% --- Additional Calculations: Partial Derivatives of Wind Functions ---
 % Convert the user-defined wind functions to symbolic expressions
-W_x_sym = str2sym(wx_str);
-W_y_sym = str2sym(wy_str);
+W_x_sym = v;
+W_y_sym = u;
 
 % Compute the partial derivatives
-dWx_dx = simplify(diff(W_x_sym, x));
-dWx_dy = simplify(diff(W_x_sym, y));
-dWy_dx = simplify(diff(W_y_sym, x));
-dWy_dy = simplify(diff(W_y_sym, y));
+dWx_dx = (diff(W_x_sym, x));
+dWx_dy = (diff(W_x_sym, y));
+dWy_dx = (diff(W_y_sym, x));
+dWy_dy = (diff(W_y_sym, y));
 
 %% --- Converting symbolic expressions to MATLAB function handles ---
 
@@ -313,8 +401,7 @@ else
 end
 
 %% Optimal Solution
-ct = input('Enter the final time weight (ct); e.g., 0.1:');
-% cm = input('Enter the final mass weight (cm); e.g., -1:');
+ct = input('Enter the final time weight (ct); e.g., 0 < ct < 5:');
 cm=-1;
 m_0 = input('Enter the initil mass; e.g., 140000:');
 % Initial shooting parameters:
@@ -350,29 +437,35 @@ for i = 1:K
         q0 = abs(dxdt / dydt);
     end
 end
-Init = zeros(3,1);
-Init(2) = q0;        % initial q(0)
-Init(3) = (sqrt(x_f^2+y_f^2))/300;     % final time, t_f
-Init(1)=-(1+ct)*(1/sqrt(1+Init(2)^2))/200;  % initial lambda_x(0)
-Init(1)=-0.1;
 
-N_p = 150;
-
-tic
-% Define the constraint and objective functions
-Fconst = @(x_opt) constraints(x_opt, c0, R_air, Theta, x_f, y_f, rho, s, ct,cm,m_0,N_p);
-Fmin   = @(x_opt) minsolves(x_opt);
-
-typicalX = [Init(1);Init(2);Init(3)];
-options = optimoptions(@fmincon, ...
-    'Algorithm','interior-point', ...
-    'MaxFunctionEvaluations', 1e6, ...
-    'MaxIterations',100, ...
-    'ScaleProblem','obj-and-constr', ...
-    'TypicalX',typicalX, ...
-    'ConstraintTolerance', 1e-3);
-[x_opt, fval, exitflag, output, lambda] = fmincon(Fmin, Init, [], [], [], [], [], [], Fconst, options);
-toc
+for trial_initial=1:5
+    disp('Initialization (up to 5 trials):')
+    trial_initial
+    Init = zeros(3,1);
+    Init(2) = q0+0.1*rand(1);        % initial q(0)
+    Init(3) = (1-0.1*rand(1))*(sqrt(x_f^2+y_f^2))/300;     % final time, t_f
+    Init(1)=-(1+ct)*(1/sqrt(1+Init(2)^2))/200;  % initial lambda_x(0)
+    Init(1)=-0.1*(1-rand(1)/10);
+    N_p = floor(150*(1-0.1*rand(1)));
+    % Define the constraint and objective functions
+    Fconst = @(x_opt) constraints(x_opt, c0, R_air, Theta, x_f, y_f, rho, s, ct,cm,m_0,N_p);
+    Fmin   = @(x_opt) minsolves(x_opt);
+    
+    typicalX = [Init(1);Init(2);Init(3)];
+    options = optimoptions(@fmincon, ...
+        'Algorithm','interior-point', ...
+        'MaxFunctionEvaluations', 1e6, ...
+        'MaxIterations',100, ...
+        'ScaleProblem','obj-and-constr', ...
+        'TypicalX',typicalX, ...
+        'ConstraintTolerance', 1e-3,'Display', 'none');
+    [x_opt, fval, exitflag, output, lambda] = fmincon(Fmin, Init, [], [], [], [], [], [], Fconst, options);
+    if exitflag==1
+        disp('Optimization succeeded:')
+        disp(output)
+        break
+    end
+end
 %% Visualization and Post-Processing
 % State vector: [x, y, m, z, lambda_x, q]
 X = zeros(N_p, 6);
@@ -421,7 +514,7 @@ for i = 1:N_p-1
     %     v_opt(i) = v;
     
     residual = @(v) abs(Qv(v));
-    v_lo = 150;
+    v_lo = 180;
     v_hi = 280;
     v = fminbnd(residual, v_lo, v_hi);
     v_opt(i) = v;
@@ -484,13 +577,21 @@ v_opt(N_p,1)=v_opt(N_p-1,1);
 Pi(N_p,1)=Pi(N_p-1,1);
 
 figure (2)
-plot(X(:,1), X(:,2), 'k', 'LineWidth', line_width)
+plot(X(:,1), X(:,2), 'r', 'LineWidth', 1.75)
 hold on
 bullet_1 = [0, x_f];
 bullet_2 = [0, y_f];
-plot(bullet_1, bullet_2, 'bo', 'MarkerSize', 8, 'MarkerFaceColor', 'b'); 
+plot(bullet_1, bullet_2, 'bo', 'MarkerSize', 8, 'MarkerFaceColor', 'b');
 hold on
-
+if user_wind==0
+quiver(X_wind, Y_wind, U, V, ...
+    'AutoScale', 'on', ...
+    'AutoScaleFactor', 1, ...
+    'LineWidth', 0.75, ...
+    'MaxHeadSize', 5, ...
+    'Color', 'k');
+end
+    
 figure (3)
 plot(Time, X(:,3), 'k', 'LineWidth', line_width)
 hold on
@@ -582,7 +683,7 @@ for i = 1:N_p-1
         * ( T_1(v) + 2/v + T_2(v) );
     
     residual = @(v) abs(Qv(v));
-    v_lo = 150;
+    v_lo = 180;
     v_hi = 280;
     v = fminbnd(residual, v_lo, v_hi);
     V_u(i,1) = v;
