@@ -145,11 +145,11 @@ else
         params.x0d   = l * rand(1, Md);
         params.y0d   = l * rand(1, Md);
         params.R0d   = R0 * (0.5 + 2.5 * rand(1, Md));
-
+        
         % Initialize symbolic wind field
         u = params.U_inf;
         v = params.V_inf;
-
+        
         % Vortex contributions
         for i = 1:Mv
             dx = x - params.x0v(i);
@@ -158,7 +158,7 @@ else
             u = u + params.Gamma(i)/(2*pi) * (-dy / r2);
             v = v + params.Gamma(i)/(2*pi) * ( dx / r2);
         end
-
+        
         % Dipole contributions
         for i = 1:Md
             dx = x - params.x0d(i);
@@ -173,35 +173,31 @@ else
             u = u + (1/(2*pi)) * ux / r4;
             v = v + (1/(2*pi)) * uy / r4;
         end
-
+        
         % Convert to numeric functions
         W_x = matlabFunction(u, 'Vars', [x, y]);
         W_y = matlabFunction(v, 'Vars', [x, y]);
-
+        
         % Visualize numerically
         U = W_x(X_wind, Y_wind);
         V = W_y(X_wind, Y_wind);
-
+        
         figure(10); clf;
-        quiver(X_wind, Y_wind, U, V, ...
-            'AutoScale', 'on', ...
-            'AutoScaleFactor', 1, ...
-            'LineWidth', 0.75, ...
-            'MaxHeadSize', 5, ...
-            'Color', 'k');
+        h = streamslice(X_wind, Y_wind, U, V);
+        set(h, 'Color', 'k');
         axis equal tight;
         xlabel('x [m]');
         ylabel('y [m]');
         title('Synthetic Wind Field');
-
+        
         grid on;
         set(gca, ...
             'GridColor', 'r', ...
             'XColor', 'r', ...
             'YColor', 'r');
-
+        
         drawnow;
-
+        
         % Ask user if they like this field
         answer = lower(input('Do you want to keep this wind field? (y/n): ', 's'));
         if strcmp(answer, 'y')
@@ -584,14 +580,10 @@ bullet_2 = [0, y_f];
 plot(bullet_1, bullet_2, 'bo', 'MarkerSize', 8, 'MarkerFaceColor', 'b');
 hold on
 if user_wind==0
-quiver(X_wind, Y_wind, U, V, ...
-    'AutoScale', 'on', ...
-    'AutoScaleFactor', 1, ...
-    'LineWidth', 0.75, ...
-    'MaxHeadSize', 5, ...
-    'Color', 'k');
+    h = streamslice(X_wind, Y_wind, U, V);
+    set(h, 'Color', 'k');
 end
-    
+
 figure (3)
 plot(Time, X(:,3), 'k', 'LineWidth', line_width)
 hold on
