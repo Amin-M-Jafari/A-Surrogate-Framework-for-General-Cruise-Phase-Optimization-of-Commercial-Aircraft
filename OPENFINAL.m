@@ -1,14 +1,15 @@
-%% Complete Cruise-Phase Optimization of Commercial Aircraft
+%% =======Complete Cruise-Phase Optimization of Commercial Aircraft========
+%% ========================================================================
 clear all; clc;
 global W_x_func W_y_func g_func dg_dx_func dg_dy_func ...
     dWx_dx_func dWx_dy_func dWy_dx_func dWy_dy_func ...
     C_D_func dC_D_dv_func C_s_func dC_s_dv_func
-%% User Inputs for Domain Dimensions
+%% User Inputs for Domain Dimensions---------------------------------------
 x_f = input('Enter the x-dimension of the flight box (x_f[m]); e.g., 3*10^6: ');
 y_f = input('Enter the y-dimension of the flight box (y_f[m]); e.g., 3*10^6: ');
 font_size = 12;
 line_width = 1;
-%% Choose Input Method for Scattered Points
+%% Choose Input Method for Scattered Points--------------------------------
 disp('Select input method for flight-sensitive area points:');
 disp('1: Interactive clicking (ginput)');
 disp('2: Load from file (CSV, TXT, or XLSX)');
@@ -32,7 +33,8 @@ switch method
         end
         hold off;
     case 2
-        [fileName, pathName] = uigetfile({'*.csv;*.txt;*.xlsx', 'Data Files (*.csv, *.txt, *.xlsx)'}, ...
+        [fileName, pathName] = uigetfile({'*.csv;*.txt;*.xlsx',...
+            'Data Files (*.csv, *.txt, *.xlsx)'}, ...
             'Select the data file containing scattered points');
         if isequal(fileName, 0)
             error('No file selected. Exiting.');
@@ -46,7 +48,7 @@ switch method
 end
 Xs(:,1) = min(max(Xs(:,1), 0), x_f);
 Xs(:,2) = min(max(Xs(:,2), 0), y_f);
-%% Ask for the Number of Clusters (Ellipses)
+%% Ask for the Number of Clusters (Ellipses)-------------------------------
 K = input('Enter the number of clusters (ellipses): ');
 % Ensure we have enough points for clustering: N ≥ 4K
 N = size(Xs,1);
@@ -54,23 +56,23 @@ if N < 4*K
     error('Insufficient points! You provided %d points, but at least %d points are required for %d clusters. Please add more points or reduce the number of clusters.', N, 4*K, K);
 end
 
-%% Automatically Determine the Scaling Factor 'k'
+%% Automatically Determine the Scaling Factor 'k'--------------------------
 % For a 85% confidence ellipse in 2D:
 k = sqrt(chi2inv(0.85, 2));
-%% Clustering Using k-Means
+%% Clustering Using k-Means------------------------------------------------
 [idx, centroids] = kmeans(Xs, K);
-%% Initialize Arrays for Ellipse Parameters
+%% Initialize Arrays for Ellipse Parameters--------------------------------
 a     = zeros(K, 1);  % Semi-axis lengths
 b     = zeros(K, 1);
 alpha = zeros(K, 1);  % Orientation angles (in radians)
-%% Plot the Scattered Points and Cluster Centroids
+%% Plot the Scattered Points and Cluster Centroids-------------------------
 figure (2)
 hold on;
 plot(Xs(:,1), Xs(:,2), 'k.', 'MarkerSize', 15);
 set(gca, 'FontSize', font_size, 'TickLabelInterpreter', 'latex', 'GridColor', 'r');
 plot(centroids(:,1), centroids(:,2), 'r.', 'MarkerSize', 20, 'LineWidth', 2);
 set(gca, 'FontSize', font_size, 'TickLabelInterpreter', 'latex', 'GridColor', 'r');
-%% Compute Ellipse Parameters for Each Cluster
+%% Compute Ellipse Parameters for Each Cluster-----------------------------
 for i = 1:K
     % Extract points in the i-th cluster
     cluster_points = Xs(idx == i, :);
@@ -108,15 +110,15 @@ xlim([-0.1*x_f, 1.1*x_f]);  % Limit x-axis
 ylim([-0.1*y_f, 1.1*y_f]);  % Limit y-axis
 grid on;
 set(gca, 'FontSize', font_size, 'TickLabelInterpreter', 'latex', 'GridColor', 'r');
-%% User Inputs for Wind Functions W_x(x,y) and W_y(x,y)
+%% User Inputs for Wind Functions W_x(x,y) and W_y(x,y)--------------------
 syms x y real
 % Parameters
-Mv = 5; Md = 5;
+Mv = 5; Md = 1;
 l = min(x_f, y_f);
 R0 = l / 7.5;
 
 % Ask user to choose wind field type
-customWind = lower(input('Do you want to provide your own wind field? y for yes and n for synthetic built-in wind generator: ', 's'));
+customWind = lower(input('Do you want to provide your own wind field? Y for yes and N for synthetic built-in wind generator: ', 's'));
 user_wind=0;
 if strcmp(customWind, 'y')
     user_wind=1;
@@ -126,7 +128,7 @@ if strcmp(customWind, 'y')
     u = input('Enter W_y as a function handle, e.g., @(x,y): ');
 else
     % SYNTHETIC WIND FIELD GENERATION
-    Max_wind = input('Enter the maximum absolute wind value [m/s], e.g., 20: ');
+    Max_wind = input('Enter a reference value for wind [m/s], [ideally between 0 and 30]: ');
     
     % Precompute mesh for visualization
     [X_wind, Y_wind] = meshgrid(linspace(0, x_f, 25), linspace(0, y_f, 25));
@@ -199,13 +201,13 @@ else
         drawnow;
         
         % Ask user if they like this field
-        answer = lower(input('Do you want to keep this wind field? (y/n): ', 's'));
+        answer = lower(input('Do you want to keep this wind field? (Y/N): ', 's'));
         if strcmp(answer, 'y')
             break;  % Accept generated wind
         end
     end
 end
-%% --- Additional Calculations: g(x,y) and its Partial Derivatives ---
+%% Additional Calculations: g(x,y) and its Partial Derivatives ------------
 % Prompt user for the coefficients c_{s,i} for each ellipse (cluster)
 disp('Enter the weights c_{s,i} [ideally between 0 and 1] for each ellipse (as a vector of length K).');
 c_s = input(sprintf('Enter weights for each of the %d ellipses (e.g., [0.1 0.2 ...]): ', K));
@@ -240,7 +242,7 @@ end
 dg_dx_sym = (diff(g_sym, x));
 dg_dy_sym = (diff(g_sym, y));
 
-%% --- Additional Calculations: Partial Derivatives of Wind Functions ---
+%% Additional Calculations: Partial Derivatives of Wind Functions ---------
 % Convert the user-defined wind functions to symbolic expressions
 W_x_sym = v;
 W_y_sym = u;
@@ -251,7 +253,7 @@ dWx_dy = (diff(W_x_sym, y));
 dWy_dx = (diff(W_y_sym, x));
 dWy_dy = (diff(W_y_sym, y));
 
-%% --- Converting symbolic expressions to MATLAB function handles ---
+%% Converting symbolic expressions to MATLAB function handles -------------
 
 % Convert g(x,y) and its derivatives into functions
 g_func    = matlabFunction(g_sym, 'vars', [x, y]);
@@ -266,9 +268,9 @@ dWx_dy_func = matlabFunction(dWx_dy, 'vars', [x, y]);
 dWy_dx_func = matlabFunction(dWy_dx, 'vars', [x, y]);
 dWy_dy_func = matlabFunction(dWy_dy, 'vars', [x, y]);
 
-%% =================== Begin Model Definitions =========================
-%% Atmospheric Model and Cruise Altitude
-% Default constants (Table 2)
+%% ===================== Begin Model Definitions ==========================
+%% Atmospheric Model and Cruise Altitude-----------------------------------
+% Default constants (Table)
 P0      = 101325;         % Sea-level pressure (Pa)
 c0      = 1.4;            % Specific heat ratio
 s       = 283.3;          % Wing area (m^2)
@@ -279,15 +281,15 @@ g       = 9.81;           % Gravity (m/s^2)
 Theta0  = 288.15;         % Sea-level temperature (K)
 beta    = 0.0065;         % Temperature lapse rate (K/m)
 
-% Ask user for cruise altitude (in meters)
-h_bar = input('Enter the cruise altitude (in meters); e.g., 9000: ');
+% Ask user for cruise altitude
+h_bar = input('Enter the cruise altitude [m]; e.g., 9000: ');
 
 % Atmospheric Constants
 Theta= Theta0 - beta * h_bar;
 P= P0 * (Theta/Theta0)^(g/(beta*R_air));
 rho= P / (R_air * Theta);
 
-%% Aerodynamic Drag Coefficient Model
+%% Aerodynamic Drag Coefficient Model--------------------------------------
 % Default constants
 % For c(M,v): use k0p
 k01 = 0.0067;   k02 = -0.1861;  k03 = 2.2420;   k04 = -6.4350;  k05 = 6.3428;
@@ -298,7 +300,7 @@ k21 = -0.1317;  k22 = 1.3427;   k23 = -1.2839;  k24 = 5.0164;   k25 = 0.0000;
 % Constant offsets for c, b, a
 C_D0i = 0.01322;  C_D1i = -0.00610;  C_D2i = 0.06000;
 
-%% --- Aerodynamic and Thrust Models Setup ---
+%% Aerodynamic and Thrust Models Setup ------------------------------------
 % Ask the user if they want to use the default models or provide custom formulas
 useDefault = input('Do you want to use the default formulas for C_D, C_s, and T_max? (Y/N): ', 's');
 
@@ -309,9 +311,9 @@ syms v_sym M_sym m_sym  % v: speed, M: Mach number, m: mass variable for C_D
 dM_sym_dv = 1 / sqrt(c0 * R_air * Theta);
 
 if strcmpi(useDefault, 'Y')
-    %% DEFAULT MODELS
-    % --- Aerodynamic Drag Coefficient Model: Default Constants
-    % Define barK as a function of Mach number (symbolically)
+    %% DEFAULT MODELS------------------------------------------------------
+    % Aerodynamic Drag Coefficient Model: Default Constants
+    % Define bar_K as a function of Mach number (symbolically)
     barK_sym = ((M_sym - 0.4)^2) / sqrt(1 - M_sym^2);
     
     % Default symbolic expressions for a, b, and c (which depend on M only)
@@ -335,17 +337,17 @@ if strcmpi(useDefault, 'Y')
         (diff(B_sym, v_sym) + diff(B_sym, M_sym)*dM_sym_dv)*m_sym + ...
         (diff(c_sym, v_sym) + diff(c_sym, M_sym)*dM_sym_dv);
     
-    % --- Fuel Consumption Model: Default ---
+    % Fuel Consumption Model: Default
     % Default formula for C_s (assumed to depend on M_sym only in the default)
     C_s_sym = C_s0 * (Theta/Theta0)^(0.5) * (1 + 1.2 * M_sym);
     dC_s_dv = (diff(C_s_sym, v_sym) + diff(C_s_sym, M_sym)*dM_sym_dv);
     
-    % --- Thrust Model: Default ---
+    % Thrust Model: Default
     T_max_func = @(M) (P * Theta0 / (P0 * Theta)) * T0 * ...
         (1 + ((c0 - 1)/2) * M.^2).^(c0/(c0-1)) .* (1 - 0.49 * sqrt(M));
     
 else
-    %% CUSTOM MODELS
+    %% CUSTOM MODELS-------------------------------------------------------
     % For the drag coefficient, ask the user to provide formulas for a(v,M), b(v,M), and c(v,M)
     disp('Enter your custom formulas for the aerodynamic drag model:');
     a_str = input('Enter a(v,M) as a function of v and M (e.g., ''v.^0 + M''): ', 's');
@@ -380,7 +382,7 @@ else
     % Convert the T_max symbolic expression to a function later.
 end
 
-%% --- Convert Symbolic Expressions to Function Handles ---
+%% Convert Symbolic Expressions to Function Handles -----------------------
 % Convert C_D and its derivative: note that these functions take (v, M, m) as inputs.
 C_D_func    = matlabFunction(C_D_sym, 'Vars', [v_sym, M_sym, m_sym]);
 dC_D_dv_func = matlabFunction(dC_D_dv, 'Vars', [v_sym, M_sym, m_sym]);
@@ -396,10 +398,11 @@ else
     T_max_func = matlabFunction(T_max_sym, 'Vars', M_sym);
 end
 
-%% Optimal Solution
-ct = input('Enter the final time weight (ct); e.g., 0 < ct < 5:');
+%% ===========================Optimal Solution=============================
+%% ========================================================================
+ct = input('Enter the final time weight (ct); ideally, 0 < ct < 5: ');
 cm=-1;
-m_0 = input('Enter the initil mass; e.g., 140000:');
+m_0 = input('Enter the initil mass; ideally between 10^5 [kg] and 1.8*10^5[kg] [mind the flight distance]: ');
 % Initial shooting parameters:
 x0 = 0;  y0 = 0;
 bestD = inf;
@@ -410,30 +413,26 @@ for i = 1:K
     ai = a(i);            bi = b(i);
     alph = alpha(i);
     
-    % 1) transform to ellipse frame
     ui =  (x0-cx)*cos(alph) + (y0-cy)*sin(alph);
     vi = -(x0-cx)*sin(alph) + (y0-cy)*cos(alph);
     
-    % 2) project radially to boundary
     ti = atan2( vi/bi, ui/ai );
     
-    % boundary point in world coords
     ub = ai*cos(ti);  vb = bi*sin(ti);
     xb = cx + ub*cos(alph) - vb*sin(alph);
     yb = cy + ub*sin(alph) + vb*cos(alph);
     
-    % 3) check distance
     d = hypot(xb - x0, yb - y0);
     if d < bestD
         bestD = d;
-        % 4) compute raw tangent derivative dy/dx
+        % compute raw tangent derivative dy/dx
         dxdt = -ai*sin(ti)*cos(alph) - bi*cos(ti)*sin(alph);
         dydt = -ai*sin(ti)*sin(alph) + bi*cos(ti)*cos(alph);
         
-        q0 = abs(dxdt / dydt);
+        q0 = abs(dydt / dxdt);
     end
 end
-
+Number_of_Nodes=250;
 for trial_initial=1:5
     disp('Initialization (up to 5 trials):')
     trial_initial
@@ -442,7 +441,7 @@ for trial_initial=1:5
     Init(3) = (1-0.1*rand(1))*(sqrt(x_f^2+y_f^2))/300;     % final time, t_f
     Init(1)=-(1+ct)*(1/sqrt(1+Init(2)^2))/200;  % initial lambda_x(0)
     Init(1)=-0.1*(1-rand(1)/10);
-    N_p = floor(150*(1-0.1*rand(1)));
+    N_p = floor(Number_of_Nodes*(1-0.1*rand(1)));
     % Define the constraint and objective functions
     Fconst = @(x_opt) constraints(x_opt, c0, R_air, Theta, x_f, y_f, rho, s, ct,cm,m_0,N_p);
     Fmin   = @(x_opt) minsolves(x_opt);
@@ -462,7 +461,7 @@ for trial_initial=1:5
         break
     end
 end
-%% Visualization and Post-Processing
+%% ==================Visualization and Post-Processing=====================
 % State vector: [x, y, m, z, lambda_x, q]
 X = zeros(N_p, 6);
 Time=zeros(N_p,1);
@@ -505,10 +504,6 @@ for i = 1:N_p-1
     Qv = @(v) lx_var * sqrt(1 + q_var^2) - ( ct + Qz_v + lx_var * Qx_v(v) + lx_var*q_var*Qy_v(v) ) ...
         * ( T_1(v) + 2/v + T_2(v) );
     
-    %     vinit = 190;  % initial guess for v
-    %     v = fzero(Qv, vinit);
-    %     v_opt(i) = v;
-    
     residual = @(v) abs(Qv(v));
     v_lo = 180;
     v_hi = 280;
@@ -517,8 +512,7 @@ for i = 1:N_p-1
     
     MaxThrust(i,1)=T_max_func(M(v));
     Drag(i,1)=0.5 * rho * s * v^2 * C_D_func(v, M(v), m_var);
-    Pi(i,1)=Drag(i,1)/MaxThrust(i,1);
-    %%RK-3rd-Order Block
+    %% RK-3rd-Order Block
     x_var_ref=x_var;
     y_var_ref=y_var;
     m_var_ref=m_var;
@@ -570,10 +564,13 @@ for i = 1:N_p-1
     X(i+1,6) = X(i,6) + (Qq(1)+4*Qq(2)+Qq(3)) * dt/6;
 end
 v_opt(N_p,1)=v_opt(N_p-1,1);
+for i=1:N_p-1
+    Pi(i,1)=(X(i,3)*(v_opt(i+1,1)-v_opt(i,1))/dt+Drag(i,1))/MaxThrust(i,1);
+end
 Pi(N_p,1)=Pi(N_p-1,1);
 
 figure (2)
-plot(X(:,1), X(:,2), 'r', 'LineWidth', 1.75)
+plot(X(:,1), X(:,2), 'r', 'LineWidth', 2)
 hold on
 bullet_1 = [0, x_f];
 bullet_2 = [0, y_f];
@@ -628,9 +625,8 @@ ylabel('$\Pi(t)$', 'Interpreter', 'latex', 'FontSize', font_size);
 title('Optimal Throttle Setting-Time Plot', 'Interpreter', 'latex', 'FontSize', font_size);
 grid on;
 set(gca, 'FontSize', font_size, 'TickLabelInterpreter', 'latex', 'GridColor', 'r');
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% Constraint Function
+%% Constraint Function-----------------------------------------------------
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function [cin, ceq] = constraints(x_opt, c0, R_air, Theta, x_f, y_f, rho, s,ct,cm,m_0,N_p)
 global W_x_func W_y_func g_func dg_dx_func dg_dy_func ...
@@ -680,7 +676,7 @@ for i = 1:N_p-1
     v = fminbnd(residual, v_lo, v_hi);
     V_u(i,1) = v;
     
-    %%RK-3rd-Order Block
+    %% RK-3rd-Order Block
     x_var_ref=x_var;
     y_var_ref=y_var;
     m_var_ref=m_var;
@@ -743,7 +739,7 @@ ceq(1,1)=X(N_p,1)-x_f;
 ceq(2,1)=X(N_p,2)-y_f;
 ceq(3,1) = -(ct + Qz_end + lx_var*(Qx_end + q_var*Qy_end)) / Qm_end - cm;
 end
-%% Objective Function (Dummy)
-function Y = minsolves(x_opt)
-Y = 1;
+%% Objective Function (Dummy)----------------------------------------------
+function Y=minsolves(x_opt)
+Y=1;
 end
